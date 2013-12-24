@@ -14,7 +14,7 @@ This small program can be used to calculate CRC-32 hash from any files. It can d
 
 Syntax: `python crc32.py [options] inputs`
 
-Input can be individual files, and/or folders. Use Unix shell-style wildcard (*, ?, []) for the file name pattern.
+Input can be individual files, and/or folders. Use reduced Unix shell-style wildcard (*, ?) for the file name pattern.
 
 Options:
 

@@ -2,7 +2,7 @@
 
 # Copyright (C) 2013 Nguyen Hung Quy a.k.a dreamer2908
 #
-# Python CRC-32 Hasher v1.0 is free software; you can redistribute it 
+# Python CRC-32 Hasher v1.1 is free software; you can redistribute it 
 # and/or modify it under the terms of the GNU General Public License 
 # as published by the Free Software Foundation; either version 2 of 
 # the License, or (at your option) any later version.
@@ -15,7 +15,7 @@
 import sys, os, zlib, glob, shutil, re, time
 
 programName = "Python CRC-32 Hasher"
-version = "1.0"
+version = "1.2"
 author = "dreamer2908"
 
 addcrc = False
@@ -31,30 +31,43 @@ st_notok = 0
 st_notfound = 0
 st_size = 0
 
-# Open the file in binary mode (important) for reading
-# Get a unit of data, call zlib.crc32 to get its hash. 
-# Then get another unit, and call crc32 again; this time, 
-# also give it the hash just got from previous data
+# Open the file in binary mode (important) for reading. Get a unit of data, 
+# call zlib.crc32 to get its hash. Then get another unit, and call crc32 again; 
+# this time, also give it the hash just got from previous data. 
 # It will continue to calculate the hash. Repeat this until EOF.
-# The hash got from calculating unit by unit is the same as 
-# the one got from processing everything in one blast.
-# Memory consuming is lower this way.
-def crc32(fileName):
+# The hash got from calculating unit by unit is the same as the one got from 
+# processing everything in one blast. Memory consuming is lower this way.
+# v2 uses a read cache instead of reading line by line.
+# CPU usage is reduced by upto 40% (23s vs. 39s).
+# According to my benchmark, without OS disk cache (or file much larger than the cache), 
+# 1 MiB of cache gives much higher speed than 100 KiB (59.247 MiB/s vs. 31.205 MiB/s),
+# but consumes about 10% more CPU; 4 MiB of cache doesn't give any benefit over 1 MiB.
+# With OS disk cache (files much smaller than the cache), speed: 100 KiB > 1 MiB > 4 MiB,
+# CPU usage: 100 KiB < 1 MiB < 4 MiB. 1 MiB cache seems to be the best choice.
+# All tests were done on Windows 7 SP1 x64 and Python 3.3.3 x86.
+# Additional tests on Python 2.7.4, 3.3.1, PyPy3 2.1 Beta 1, PyPy 2.2.1 (Mint 15 x64):
+# 4 MiB cache gives about 3-5% more speed than 1 MiB does (119.707 vs. 111.884 MiB/s)
+# PyPy3, surprisingly, give bad results: it consumes the whole core, but takes twice 
+# time to finish (56.497 MiB/s). PyPy gives less but still bad results (85.958 MiB/s)
+# Is PyPy supposed to be faster than normal Python? OK, not for this program then. 
+# CPU botneck? Hm... Weird. The botneck is always IO on other tests. 
+# Maybe something is wrong with their zlib implemention.
+# Changed to 2 MiB cache. Will be better on fast disk.
+def crc32v2(fileName):
 	fd = open(fileName,"rb")
-	prev = None
-	for eachLine in fd:
-		if not prev:
-			prev = zlib.crc32(eachLine)
-		else:
-			prev = zlib.crc32(eachLine, prev)
-	fd.close()
-	return prev
+	crc = 0
+	while True:
+		buffer = fd.read(2 * 1024 * 1024)
+		if len(buffer) == 0:
+			fd.close()
+			return crc
+		crc = zlib.crc32(buffer, crc)
 
 # From version 2.6, the return value is in the range [-2**31, 2**31-1], 
 # and from ver 3.0, the return value is unsigned and in the range [0, 2**32-1]
 # This works on both versions, confirmed by checking over 33 different files
 def crc32_s(fileName):
-	iHash = crc32(fileName)
+	iHash = crc32v2(fileName)
 	if sys.version_info[0] < 3 and iHash < 0: 
 		iHash += 2 ** 32
 	sHash = '%08X' % iHash
@@ -172,28 +185,38 @@ if len(pathList) < 1:
 		' \"[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv\"')
 	sys.exit()
 
+# Benmark setup
+if sys.platform == 'win32':
+    # On Windows, the best timer is time.clock
+    default_timer = time.clock
+else:
+    # On most other platforms the best timer is time.time
+    default_timer = time.time
+
 # Process files and folders
-start = time.clock()
+start = default_timer()
 for path in pathList:
 	if os.path.isdir(path):
 		processFolder(path, "*")
 	elif os.path.isfile(path):
 		processFile(path)
-	elif "*" in path:
+	elif ("*" in path) or ("?" in path):
 		processFolderWithMask(path)
 
 # Print stats
-elapsed = (time.clock() - start)
+elapsed = (default_timer() - start)
+if elapsed == 0:
+	elapsed = 1
 print("\nTotal: %d. OK: %d. Not OK: %d. CRC not found: %d." % (st_total, st_ok, st_notok, st_notok))
 speed = st_size * 1.0 / elapsed
 if speed >= 1000 * 1024 * 1024:
-	print("Speed: %0.3f GiB read in %d sec => %0.3f GiB/s." % (st_size / (1024 * 1024 * 1024), elapsed, speed / (1024 * 1024 * 1024)))
+	print("Speed: %0.3f GiB read in %0.3f sec => %0.3f GiB/s." % (st_size / (1024 * 1024 * 1024), elapsed, speed / (1024 * 1024 * 1024)))
 elif speed >= 1000 * 1024:	
-	print("Speed: %0.3f MiB read in %d sec => %0.3f MiB/s." % (st_size / (1024 * 1024), elapsed, speed / (1024 * 1024)))
+	print("Speed: %0.3f MiB read in %0.3f sec => %0.3f MiB/s." % (st_size / (1024 * 1024), elapsed, speed / (1024 * 1024)))
 elif speed >= 1000:	
-	print("Speed: %0.3f KiB read in %d sec => %0.3f KiB/s." % (st_size / (1024), elapsed, speed / (1024)))
+	print("Speed: %0.3f KiB read in %0.3f sec => %0.3f KiB/s." % (st_size / (1024), elapsed, speed / (1024)))
 else:
-	print("Speed: %0.3f B read in %d sec =>  %0.0f B/s." % (st_size, elapsed, speed))
+	print("Speed: %0.3f B read in %0.3f sec =>  %0.0f B/s." % (st_size, elapsed, speed))
 
 # Write output SFV file
 if createsfv:
@@ -204,3 +227,4 @@ if createsfv:
 		print('\"%s\" created!' % sfvPath)
 	except:
 		print("Couldn't created \"%s\"!" % sfvPath)
+
