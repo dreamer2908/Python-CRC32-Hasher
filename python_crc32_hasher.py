@@ -15,7 +15,7 @@
 import sys, os, zlib, glob, shutil, re, time
 
 programName = "Python CRC-32 Hasher"
-version = "1.2"
+version = "1.3"
 author = "dreamer2908"
 
 addcrc = False
@@ -47,12 +47,11 @@ st_size = 0
 # All tests were done on Windows 7 SP1 x64 and Python 3.3.3 x86.
 # Additional tests on Python 2.7.4, 3.3.1, PyPy3 2.1 Beta 1, PyPy 2.2.1 (Mint 15 x64):
 # 4 MiB cache gives about 3-5% more speed than 1 MiB does (119.707 vs. 111.884 MiB/s)
-# PyPy3, surprisingly, give bad results: it consumes the whole core, but takes twice 
-# time to finish (56.497 MiB/s). PyPy gives less but still bad results (85.958 MiB/s)
-# Is PyPy supposed to be faster than normal Python? OK, not for this program then. 
-# CPU botneck? Hm... Weird. The botneck is always IO on other tests. 
-# Maybe something is wrong with their zlib implemention.
-# Changed to 2 MiB cache. Will be better on fast disk.
+# PyPy3, surprisingly, give bad results: it consumes the whole core, but runs much 
+# slower (56.497 MiB/s). PyPy gives less but still bad results (85.958 MiB/s)
+# PyPy is usually faster than normal Python, but unfortunately, not with this program. 
+# Maybe something wrong with their zlib implemention causes CPU botneck.
+# Changed to 2 MiB cache. Slightly better on fast disks.
 def crc32v2(fileName):
 	fd = open(fileName,"rb")
 	crc = 0
@@ -123,8 +122,7 @@ def processFile(fileName):
 			result = "CRC not found!"
 		st_notfound += 1
 
-	print("%s" % fileName)
-	print("CRC: %s. Result: %s" % (sHash, result))
+	print("%s    %s    %s" % (fileName, sHash, result))
 
 	# Append this to sfv's content. Yes, use newName as it's up-to-date
 	# Use "global" to access external variable (important)
@@ -147,6 +145,44 @@ def processFolderWithMask(path):
 	passed = True
 	if passed:
 		processFolder(folder, mask)
+
+# Calculate CPU time and average CPU usage
+def getCpuStat(cpuOld, cpuNew, timeOld, timeNew):
+	cpuTime = float(cpuNew) - float(cpuOld)
+	elapsedTime = float(timeNew) - float(timeOld)
+
+	if cpuTime == 0:
+		cpuTime = 0.001
+	if elapsedTime == 0:
+		elapsedTime = cpuTime
+	
+	cpuPercentage = 100 * cpuTime / elapsedTime
+
+	# Devide CPU percentage by the number of CPUs if it's Windows
+	# to match reference system monitors (Windows Task Manager, etc.)
+	if sys.platform == 'win32':
+		cpuPercentage = cpuPercentage / detectCPUs()
+
+	return cpuTime, cpuPercentage, elapsedTime
+
+# Detects the number of CPUs on a system. Cribbed from pp + some modifications
+# Alternative:  multiprocessing.cpu_count()
+def detectCPUs():
+	# Linux, Unix and MacOS:
+	if hasattr(os, "sysconf"):
+		if os.sysconf_names.has_key("SC_NPROCESSORS_ONLN"):
+			# Linux & Unix:
+			ncpus = os.sysconf("SC_NPROCESSORS_ONLN")
+			if isinstance(ncpus, int) and ncpus > 0:
+				return ncpus
+		else: # OSX:
+			return int(os.popen2("sysctl -n hw.ncpu")[1].read())
+	# Windows:
+	if sys.platform == 'win32':
+		ncpus = int(os.getenv("NUMBER_OF_PROCESSORS", 0));
+		if ncpus > 0:
+			return ncpus
+	return 1 # Default
 
 # Parse paramenters
 pathList = []
@@ -172,7 +208,7 @@ if len(pathList) < 1:
 	print("%s v%s by %s\n" % (programName, version, author))
 	print("Syntax: python crc32.py [options] inputs\n")
 	print("Input can be individual files, and/or folders.")
-	print("  Use Unix shell-style wildcard for the file name pattern.\n")
+	print("  Use Unix shell-style wildcard (*, ?) for the filename pattern.\n")
 	print("Options:")
 	print("  -addcrc                        Add CRC to filenames")
 	print("  -createsfv out.sfv             Create a SFV file")
@@ -185,7 +221,7 @@ if len(pathList) < 1:
 		' \"[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv\"')
 	sys.exit()
 
-# Benmark setup
+# Stats setup
 if sys.platform == 'win32':
     # On Windows, the best timer is time.clock
     default_timer = time.clock
@@ -193,8 +229,11 @@ else:
     # On most other platforms the best timer is time.time
     default_timer = time.time
 
+startTime = default_timer()
+uOld, sOld, cOld, c, e = os.times()
+
 # Process files and folders
-start = default_timer()
+print('')
 for path in pathList:
 	if os.path.isdir(path):
 		processFolder(path, "*")
@@ -204,10 +243,13 @@ for path in pathList:
 		processFolderWithMask(path)
 
 # Print stats
-elapsed = (default_timer() - start)
-if elapsed == 0:
-	elapsed = 1
-print("\nTotal: %d. OK: %d. Not OK: %d. CRC not found: %d." % (st_total, st_ok, st_notok, st_notok))
+endTime = default_timer()
+
+uNew, sNew, cNew, c, e = os.times()
+cpuTime, cpuPercentage, elapsed = getCpuStat(uOld + sOld, uNew + sNew, startTime, endTime)
+
+print("\nTotal: %d. OK: %d. Not OK: %d. CRC not found: %d." % (st_total, st_ok, st_notok, st_notfound))
+
 speed = st_size * 1.0 / elapsed
 if speed >= 1000 * 1024 * 1024:
 	print("Speed: %0.3f GiB read in %0.3f sec => %0.3f GiB/s." % (st_size / (1024 * 1024 * 1024), elapsed, speed / (1024 * 1024 * 1024)))
@@ -217,6 +259,8 @@ elif speed >= 1000:
 	print("Speed: %0.3f KiB read in %0.3f sec => %0.3f KiB/s." % (st_size / (1024), elapsed, speed / (1024)))
 else:
 	print("Speed: %0.3f B read in %0.3f sec =>  %0.0f B/s." % (st_size, elapsed, speed))
+
+print('CPU time: %0.3f sec => Average: %0.2f %%.' % (cpuTime, cpuPercentage))
 
 # Write output SFV file
 if createsfv:
