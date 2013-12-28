@@ -28,3 +28,4 @@ Examples:
  - `python crc32.py ~/Downloads`  
  - `python crc32.py ~/Downloads/*.mkv`  
  - `python crc32.py -createsfv checksums.sfv ~/Downloads /var/www/upload/*OP*  "[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv"`
+ 
