@@ -15,7 +15,7 @@
 import sys, os, zlib, glob, shutil, re, time, struct
 
 programName = "Python CRC-32 Hasher"
-version = "1.4"
+version = "1.4.1"
 author = "dreamer2908"
 
 addcrc = False
@@ -176,6 +176,7 @@ def getCpuStat(cpuOld, cpuNew, timeOld, timeNew):
 
 	if cpuTime == 0:
 		cpuTime = 0.001
+		elapsedTime = cpuTime
 	if elapsedTime == 0:
 		elapsedTime = cpuTime
 	
@@ -262,10 +263,6 @@ def removeNonAscii(original):
 			result += '?'
 	return result
 
-# So many bugs
-if debug:
-	print('Unicode supported = %s' % unicodeSupported())
-
 # Parse paramenters
 pathList = []
 i = 1
@@ -281,9 +278,15 @@ while i < len(sys.argv):
 		force == True
 	elif arg == "-r":
 		recursive = True
+	elif arg == "-debug":
+		debug = True
 	else:
 		pathList.append(arg)
 	i += 1
+
+# So many bugs
+if debug:
+	print('Unicode supported = %s' % unicodeSupported())
 
 # Print user manual
 if len(pathList) < 1:
@@ -299,8 +302,7 @@ if len(pathList) < 1:
 	print('  python crc32.py \"/home/yumi/Desktop/[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv\"')
 	print('  python crc32.py ~/Downloads')
 	print('  python crc32.py ~/Downloads/*.mkv')
-	print('  python crc32.py -createsfv checksums.sfv ~/Downloads /var/www/upload/*OP*',
-		' \"[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv\"')
+	print('  python crc32.py -createsfv checksums.sfv ~/Downloads /var/www/upload/*OP* \"[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv\"')
 	sys.exit()
 
 # Stats setup
