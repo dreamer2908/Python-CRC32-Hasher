@@ -12,15 +12,16 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-import sys, os, zlib, glob, shutil, re, time, struct
+import sys, os, zlib, glob, fnmatch, shutil, re, time, struct
 
 programName = "Python CRC-32 Hasher"
-version = "1.4.1"
+version = "1.5"
 author = "dreamer2908"
 
 addcrc = False
 force = False
 recursive = False
+searchSubFolder = False
 createsfv = False
 
 sfvPath = "checksums.sfv"
@@ -31,11 +32,13 @@ sfvPureAscii = True
 st_total = 0
 st_ok = 0
 st_notok = 0
+st_error = 0
 st_notfound = 0
 st_size = 0
 
 debug = False
-unicodeSupport = False
+fag = []
+terminalSupportUnicode = False
 
 # Open the file in binary mode (important) for reading. Get a unit of data, 
 # call zlib.crc32 to get its hash. Then get another unit, and call crc32 again; 
@@ -59,24 +62,28 @@ unicodeSupport = False
 # Maybe some problems in their zlib implemention causes CPU botneck.
 # Changed to 2 MiB cache. Slightly better on fast disks.
 def crc32v2(fileName):
-	fd = open(fileName,"rb")
+	error = u''
 	crc = 0
-	while True:
-		buffer = fd.read(2 * 1024 * 1024)
-		if len(buffer) == 0:
-			fd.close()
-			return crc
-		crc = zlib.crc32(buffer, crc)
+	try:
+		fd = open(fileName, 'rb')
+		while True:
+			buffer = fd.read(2 * 1024 * 1024)
+			if len(buffer) == 0:
+				fd.close()
+				return crc, False
+			crc = zlib.crc32(buffer, crc)
+	except Exception as e:
+		return 0, unicode(e)
 
 # From version 2.6, the return value is in the range [-2**31, 2**31-1], 
 # and from ver 3.0, the return value is unsigned and in the range [0, 2**32-1]
 # This works on both versions, confirmed by checking over 33 different files
 def crc32_s(fileName):
-	iHash = crc32v2(fileName)
+	iHash, error = crc32v2(fileName)
 	if sys.version_info[0] < 3 and iHash < 0: 
 		iHash += 2 ** 32
 	sHash = '%08X' % iHash
-	return sHash
+	return sHash, error
 
 # In-used CRC-32 pattern: 8 characters of hexadecimal, 
 # separated from the rest by some certain "special" characters.
@@ -97,18 +104,34 @@ def detectCRC(fileName):
 			found = True
 	return found, crc
 
-# Err... Process one file here
 def processFile(fileName):
-	sHash = crc32_s(fileName)
+	# Not gonna trust the caller completely
+	if not os.path.isfile(fileName):
+		fag.append(fileName)
+		return
+
+	# In Python 2, decode the path to unicode string
+	# In python 3, it's already unicode, so don't
+	if sys.version_info[0] < 3 and hasattr(fileName, 'decode'):
+		fileName = fileName.decode(sys.getfilesystemencoding())
+
+	sHash, error = crc32_s(fileName)
 	newName = fileName
 
-	global st_total, st_ok, st_notok, st_notfound, st_size
-	st_size += os.path.getsize(fileName)
+	global st_total, st_ok, st_notok, st_notfound, st_size, st_error
+	if not error:
+		try:
+			st_size += os.path.getsize(fileName)
+		except:
+			doNothing = 1
 	st_total += 1
 
 	found, crc = detectCRC(fileName)
 
-	if sHash in fileName.upper():
+	if error:
+		result = error
+		st_error += 1
+	elif sHash in fileName.upper():
 		result = "File OK!"
 		st_ok += 1
 	elif found:
@@ -127,47 +150,55 @@ def processFile(fileName):
 		else:
 			result = "CRC not found!"
 		st_notfound += 1
+	
+	path, name = os.path.split(newName)
 
 	# deal with terminal encoding mess
-	global unicodeSupport
-	if not unicodeSupport:
+	global terminalSupportUnicode
+	if not terminalSupportUnicode:
 		fileName = removeNonAscii(fileName)
 
 	print('%s    %s    %s' % (fileName, sHash, result))
 
-	# In Python 2, decode the path to unicode string
-	# In python 3, it's already unicode, so don't
-	path, name = os.path.split(newName)
-	if sys.version_info[0] < 3:
-		name = name.decode(sys.getfilesystemencoding())
-
 	# Append this to sfv's content. Yes, use newName as it's up-to-date
 	# Use "global" to access external variable (important)
-	global sfvContent
-	sfvContent.append('\n')
-	sfvContent.append(name)
-	sfvContent.append(' ')
-	sfvContent.append(sHash)
+	if not error:
+		global sfvContent
+		sfvContent.append('\n')
+		sfvContent.append(name)
+		sfvContent.append(' ')
+		sfvContent.append(sHash)
 
-	global sfvPureAscii
-	if sfvPureAscii:
-		sfvPureAscii = isPureAscii(name)
+		global sfvPureAscii
+		if sfvPureAscii:
+			sfvPureAscii = isPureAscii(name)
 
-# Get all files matching mask in folder, and call processFile to process each one
-def processFolder(folder, mask):
-	files = glob.glob(os.path.join(folder, mask))
-	for fileName in files:
-		if os.path.isfile(fileName):
-			processFile(fileName)
+def processFolderv2(path):
 
-# This is for something like "/var/www/upload/*OP*", or "~/Downloads/*.mkv"
-# Just split folder and mask from path, and feed them to processFile
-# Additionally do some verification to protect ourselves from user's trolling
-def processFolderWithMask(path):
-	folder, mask = os.path.split(path)
-	passed = True
-	if passed:
-		processFolder(folder, mask)
+	pattern = '*'
+	usePattern = False
+
+	# Check if the input is an existing folder. 
+	# If not, split the path and check if "folder" exists
+	# 
+	if not os.path.isdir(path):
+		folder, pattern = os.path.split(path)
+		if os.path.isdir(folder):
+			path = folder
+			usePattern = True
+		elif folder == '':
+			path = os.getcwd()
+			usePattern = True
+		else: 
+			return
+
+	for (dirpath, dirnames, filenames) in os.walk(path):
+		if usePattern:
+			filenames = fnmatch.filter(filenames, pattern)
+		for fname in filenames:
+			processFile(os.path.join(dirpath, fname))
+		if (not usePattern and not recursive) or (usePattern and not searchSubFolder):
+			break
 
 # Calculate CPU time and average CPU usage
 def getCpuStat(cpuOld, cpuNew, timeOld, timeNew):
@@ -210,7 +241,7 @@ def detectCPUs():
 
 
 # Test unicode support
-def unicodeSupported():
+def terminalSupportUnicodeed():
 	try:
 		text = u'「いなり、こんこん、恋いろは。」番宣ＰＶ'.encode(sys.stdout.encoding)
 	except:
@@ -268,25 +299,23 @@ pathList = []
 i = 1
 while i < len(sys.argv):
 	arg = sys.argv[i]
-	if arg == "-addcrc":
+	if arg == "--addcrc" or arg == "-addcrc":
 		addcrc = True
-	elif arg == "-createsfv" and i < len(sys.argv) - 1:
+	elif (arg == "--createsfv" or arg == "-createsfv") and i < len(sys.argv) - 1:
 		createsfv = True
 		sfvPath = sys.argv[i+1]
 		i += 1
-	elif arg == "-f":
+	elif arg == "--f" or arg == "-f":
 		force == True
-	elif arg == "-r":
+	elif arg == "--r" or arg == "-r":
 		recursive = True
-	elif arg == "-debug":
+	elif arg == "--s" or arg == "-s":
+		searchSubFolder = True
+	elif arg == "--d" or arg == '--debug' or arg == '-debug' or arg == '-d':
 		debug = True
 	else:
 		pathList.append(arg)
 	i += 1
-
-# So many bugs
-if debug:
-	print('Unicode supported = %s' % unicodeSupported())
 
 # Print user manual
 if len(pathList) < 1:
@@ -295,9 +324,10 @@ if len(pathList) < 1:
 	print("Input can be individual files, and/or folders.")
 	print("  Use Unix shell-style wildcard (*, ?) for the filename pattern.\n")
 	print("Options:")
-	print("  -addcrc                        Add CRC to filenames")
-	print("  -createsfv out.sfv             Create a SFV file")
-	print("  -r                             Also include sub-folder\n")
+	print("  --addcrc                        Add CRC to filenames")
+	print("  --createsfv out.sfv             Create a SFV file")
+	print("  --r                             Also include sub-folder\n")
+	print("  --s                             Also search sub-folder for matching filenames\n")
 	print("Examples:")
 	print('  python crc32.py \"/home/yumi/Desktop/[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv\"')
 	print('  python crc32.py ~/Downloads')
@@ -318,17 +348,22 @@ uOld, sOld, cOld, c, e = os.times()
 
 sfvContent.append(sfvHeader)
 sfvPureAscii = True
-unicodeSupport = unicodeSupported()
+terminalSupportUnicode = terminalSupportUnicodeed()
 
 # Process files and folders
 print('')
+#print(pathList)
 for path in pathList:
-	if os.path.isdir(path):
-		processFolder(path, "*")
-	elif os.path.isfile(path):
+	if os.path.isfile(path):
 		processFile(path)
+	elif os.path.isdir(path):
+		processFolderv2(path)
+	elif (path.endswith(os.sep) or path.endswith("'") or path.endswith('"')) and os.path.isdir(path[:-1]):
+		processFolderv2(path[:-1])
 	elif ("*" in path) or ("?" in path):
-		processFolderWithMask(path)
+		processFolderv2(path)
+	else:
+		processFolderv2(path)
 
 if createsfv:
 	try:
@@ -338,6 +373,7 @@ if createsfv:
 			for content in sfvContent:
 				sfvFile.write(toAsciiBytes(content))
 		else:
+			# write BOM
 			sfvFile.write(struct.pack("<B", 255))
 			sfvFile.write(struct.pack("<B", 254))
 			for content in sfvContent:
@@ -352,7 +388,7 @@ endTime = default_timer()
 uNew, sNew, cNew, c, e = os.times()
 cpuTime, cpuPercentage, elapsed = getCpuStat(uOld + sOld, uNew + sNew, startTime, endTime)
 
-print("\nTotal: %d. OK: %d. Not OK: %d. CRC not found: %d." % (st_total, st_ok, st_notok, st_notfound))
+print("\nTotal: %d. OK: %d. Not OK: %d. CRC not found: %d. Error: %d." % (st_total, st_ok, st_notok, st_notfound, st_error))
 
 speed = st_size * 1.0 / elapsed
 if speed >= 1000 * 1024 * 1024:
@@ -365,3 +401,9 @@ else:
 	print("Speed: %0.3f B read in %0.3f sec =>  %0.0f B/s." % (st_size, elapsed, speed))
 
 print('CPU time: %0.3f sec => Average: %0.2f %%.' % (cpuTime, cpuPercentage))
+
+# So many bugs
+if debug:
+	print(' ')
+	print('Terminal supporting unicode = %s' % terminalSupportUnicodeed())
+	print('fag = %r' % fag)
