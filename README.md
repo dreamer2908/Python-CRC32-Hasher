@@ -1,44 +1,50 @@
-Python-CRC32-Hasher
+Python CRC32 Hasher
 ===================
 
 ### Introduction ###
 
-This small program can be used to calculate various types of hash from any files (CRC-32, MD5, SHA1, SHA2, ED2K). It can detect CRC hashes from filenames and compares them with calculated values to verify files' integrity automatically. It can also add CRC-32 hashes to filenames, and create SFV checksum files.
+Python CRC-32 Hasher is a console utility for calculating and verifying various types of hash from any files (CRC-32, MD4, MD5, SHA1, SHA256, SHA512, ED2K).
+
+### Features ###
+
+- Optimised for fansub releases: It automatically reads CRC-32 hashes from filenames and compares with the actual hash to verify files' integrity. Adding CRC-32 hashes to filenames automatically is supported.
+- Output in a predefined formats (only sfv currently).
+- Supports filename pattern (* and ?).
+- Ability to process directories recursively.
+- Portability: the program works the same under any platform as long as Python is installed (Linux, *BSD, Solaris, Mac OS, or Windows).
+- Written in Python, small in size, fast, open source.
 
 ### Requirements ###
 
-- Python 2.7 and later, or 3.3 and later [recommended]
+- Python 2.7+, or 3.3+ [recommended]
 - A terminal
 
 ### Usage ###
 
 Syntax: `python crc32.py [options] inputs`
 
-Input can be individual files, and/or folders. Use Unix shell-style wildcard (*, ?) for the filename pattern.
+Input can be individual files, and/or folders. Use * (any string), ? (one character) for the filename pattern.
 
 Options:
 
- - --addcrc: Adds CRC to filenames
- - --createsfv out.sfv: Creates a SFV file
- - --r: Also includes sub-folder
- - --s: Also search sub-folder for matching filenames
- - --md5: Calculate MD5 hash
- - --sha1: Calculate SHA1 hash
- - --sha*: Calculate SHA2-224/256/384/512 hashes
- - --ed2k: Calculate ED2K hash
- - --all: Calculate all supported hashes
-
- CRC-32 calculation is enabled by default
+ - `--addcrc`: Adds CRC to filenames
+ - `-c out.sfv` or `--createsfv out.sfv`: Creates a SFV file
+ - `-r` or `--recursive`: Also includes sub-folder
+ - `-s` or  --searchsubfolder : Also search sub-folder for matching filenames
+ - `--hashtype`: Enable the specified hash type. Currently supported hash types: CRC-32, MD4, MD5, SHA-1, SHA-256, SHA-512, ED2K. Please use lowercase and no hyphen for hash types. CRC-32 is enabled by default and can't be disabled.
+ - `-m` or `--most`: Enable CRC-32, MD5, SHA-1, SHA-256, SHA-512, and ED2K.
+ - `-a` or `--all`: Enable all supported hashes.
+ - `-i` or `--inputs`: Treat all remaining paramenters as filenames.
 
 Examples:
 
- - `python crc32.py "./[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv"`
- - `python crc32.py ~/Downloads`
- - `python crc32.py ~/Downloads/*.mkv`
- - `python crc32.py --md5 --sha1 --sha256 --ed2k ~/Anime/*.mkv --s`
- - `python crc32.py --createsfv checksums.sfv ~/Downloads /var/www/upload/*OP*  "[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv"`
+ - `python crc32.py \"/home/yumi/Desktop/[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv"`
+ - `python crc32.py --md5 --sha1 ~/Desktop ~/Downloads/*.mkv "/var/www/upload/Ep ??.mkv"`
+ - `python crc32.py --sha512 --ed2k -c checksums.sfv -s --addcrc /var/www/upload/*.mp4 `
 
 ### Todo ###
 
- - Import/Export list of hashes
+ - Import/Export list of hashes.
  - Setting file.
+ - Multi-thread support. Probably a dedicated thread for each hash type.
+ - SHA3 support.
