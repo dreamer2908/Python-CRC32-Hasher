@@ -359,7 +359,7 @@ def patternMatching(filenames, pattern):
 
 def byteToHumanSize(size):
 	if size >= 1000 * 1024 * 1024:
-		return '%0.3f GiB' % (size / (2024 ** 3))
+		return '%0.3f GiB' % (size / (1024 ** 3))
 	elif size >= 1000 * 1024:
 		return '%0.3f MiB' % (size / 1024 ** 2)
 	elif size >= 1000:
