@@ -3,13 +3,13 @@ Python CRC32 Hasher
 
 ### Introduction ###
 
-Python CRC-32 Hasher is a console utility for calculating and verifying various types of hash from any files (CRC-32, MD4, MD5, SHA1, SHA256, SHA512, ED2K).
+Python CRC-32 Hasher is a console utility for calculating and verifying various types of hash from any files (CRC-32, MD4, MD5, SHA1, SHA256, SHA512, ED2K). A recommended usage is putting it in your file manager context menu, as I put it in a custom action in Thunar.
 
 ### Features ###
 
 - Optimised for fansub releases: It automatically reads CRC-32 hashes from filenames and compares with the actual hash to verify files' integrity. Adding CRC-32 hashes to filenames automatically is supported.
 - Output in a predefined formats (only sfv currently).
-- Supports filename pattern (* and ?).
+- Supports filename patterns (* and ?) even when working with terminal that doesn't.
 - Ability to process directories recursively.
 - Portability: the program works the same under any platform as long as Python is installed (Linux, *BSD, Solaris, Mac OS, or Windows).
 - Written in Python, small in size, fast, open source.
@@ -38,7 +38,7 @@ Options:
 
 Examples:
 
- - `python crc32.py \"/home/yumi/Desktop/[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv"`
+ - `python crc32.py "/home/yumi/Desktop/[FFF] Unbreakable Machine-Doll - 11 [A3A1001B].mkv"`
  - `python crc32.py --md5 --sha1 ~/Desktop ~/Downloads/*.mkv "/var/www/upload/Ep ??.mkv"`
  - `python crc32.py --sha512 --ed2k -c checksums.sfv -s --addcrc /var/www/upload/*.mp4 `
 
