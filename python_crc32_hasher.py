@@ -302,7 +302,7 @@ def processFolderv2(path):
 	for (dirpath, dirnames, filenames) in os.walk(path):
 		if usePattern:
 			filenames = patternMatching(filenames, pattern)
-		for fname in filenames:
+		for fname in sorted(filenames):
 			processFile(os.path.join(dirpath, fname), True)
 		if (not usePattern and not recursive) or (usePattern and not searchSubFolder):
 			break
