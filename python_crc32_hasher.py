@@ -23,10 +23,12 @@
 import sys, os, zlib, hashlib, shutil, re, time, struct, multiprocessing, math
 
 programName = "Python CRC-32 Hasher"
-version = "1.9"
+version = "1.10"
 author = "dreamer2908"
+contributors = ["felipem775"]
 
 addcrc = False
+updatecrc = False
 force = False
 recursive = False
 searchSubFolder = False
@@ -221,7 +223,7 @@ def processFile(fileName, fromFolder = False):
 	elif sHash in fileName.upper():
 		result = "File OK!"
 		st_ok += 1
-	elif found:
+	elif found and not updatecrc:
 		result = "File not OK! %s found in filename." % crc
 		st_notok += 1
 	else:
@@ -232,6 +234,15 @@ def processFile(fileName, fromFolder = False):
 				shutil.move(fileName, newName)
 				result = "CRC added!"
 			except:
+				result = "Renaming failed!"
+				newName = fileName
+		elif updatecrc:
+			namae, ext = os.path.splitext(fileName)
+			newName = namae.replace(crc,sHash) + ext
+			try:
+				shutil.move(fileName, newName)
+				result = "CRC updated!"
+			except Exception as e:
 				result = "Renaming failed!"
 				newName = fileName
 		else:
@@ -455,7 +466,7 @@ def removeNonAscii(original):
 
 # Parse paramenters
 def parseParams():
-	global pathList, addcrc, createsfv, sfvPath, force, recursive, searchSubFolder, showChecksumResult, showFileInfo, showFullPath
+	global pathList, addcrc, updatecrc, createsfv, sfvPath, force, recursive, searchSubFolder, showChecksumResult, showFileInfo, showFullPath
 	global enableMd5, enableSha1, enableSha256, enableSha512, enableEd2k, enableCrc, enableAll, enableMd4
 	global debug, waitBeforeExit
 
@@ -469,6 +480,8 @@ def parseParams():
 
 			if arg == "addcrc":
 				addcrc = True
+			elif arg == "updatecrc":
+				updatecrc = True
 			elif arg == "createsfv" and i < len(sys.argv) - 1:
 				createsfv = True
 				sfvPath = sys.argv[i+1]
@@ -606,6 +619,7 @@ def printReadme():
 	print("  Use Unix shell-style wildcard (*, ?) for the filename pattern.\n")
 	print("Options:")
 	print("  --addcrc                        Add CRC-32 to filenames.")
+	print("  --updatecrc                     Update CRC-32 to filenames.")
 	print("  -c | --createsfv out.sfv        Create a SFV file.")
 	print("  -r | --recursive                Also include sub-folder.")
 	print("  -s | --searchsubfolder          Also search sub-folder for matching filenames.")
