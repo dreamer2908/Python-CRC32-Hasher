@@ -638,7 +638,11 @@ def initStuff():
 	# Stats setup
 	if sys.platform == 'win32':
 	    # On Windows, the best timer is time.clock
-	    defaultTimer = time.clock
+		# From Python 3.8, time.clock() has been replaced with time.perf_counter()
+		if sys.version_info[0] < 3:
+			defaultTimer = time.clock
+		else:
+			defaultTimer = time.perf_counter
 	else:
 	    # On most other platforms the best timer is time.time
 	    defaultTimer = time.time
