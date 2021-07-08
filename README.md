@@ -28,6 +28,7 @@ Input can be individual files, and/or folders. Use * (any string), ? (one charac
 Options:
 
  - `--addcrc`: Adds CRC to filenames
+ - `--updatecrc`: Updates CRC to filenames
  - `-c out.sfv` or `--createsfv out.sfv`: Creates a SFV file
  - `-r` or `--recursive`: Also includes sub-folder
  - `-s` or  --searchsubfolder : Also search sub-folder for matching filenames
